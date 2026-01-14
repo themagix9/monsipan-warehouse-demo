@@ -211,3 +211,60 @@ app.post("/scan", auth, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Backend listening on ${PORT}`);
 });
+
+/* =========================
+   Lagerbestand-Auswahl
+========================= */
+
+app.get("/stock", auth, async (_req, res) => {
+  const result = await pool.query(`
+    SELECT
+      p.name,
+      p.color,
+      p.material_type,
+      p.package,
+      p.shelf,
+      s.quantity
+    FROM stock s
+    JOIN products p ON p.id = s.product_id
+    ORDER BY p.shelf, p.color, p.material_type
+  `);
+
+  res.json(result.rows);
+});
+
+/* =========================
+   Lagerbestandladung
+========================= */
+
+async function loadStock() {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    window.location.href = "/login.html";
+    return;
+  }
+
+  const res = await fetch("/stock", {
+    headers: { Authorization: "Bearer " + token }
+  });
+
+  const items = await res.json();
+  const container = document.getElementById("stock");
+  container.innerHTML = "";
+
+  let currentShelf = "";
+
+  items.forEach(item => {
+    if (item.shelf !== currentShelf) {
+      currentShelf = item.shelf;
+      container.innerHTML += `<h2>${currentShelf}</h2>`;
+    }
+
+    container.innerHTML += `
+      <div>
+        ${item.color} – ${item.material_type} – ${item.package}:
+        <strong>${item.quantity}</strong>
+      </div>
+    `;
+  });
+}
