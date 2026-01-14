@@ -232,39 +232,3 @@ app.get("/stock", auth, async (_req, res) => {
 
   res.json(result.rows);
 });
-
-/* =========================
-   Lagerbestandladung
-========================= */
-
-async function loadStock() {
-  const token = localStorage.getItem("token");
-  if (!token) {
-    window.location.href = "/login.html";
-    return;
-  }
-
-  const res = await fetch("/stock", {
-    headers: { Authorization: "Bearer " + token }
-  });
-
-  const items = await res.json();
-  const container = document.getElementById("stock");
-  container.innerHTML = "";
-
-  let currentShelf = "";
-
-  items.forEach(item => {
-    if (item.shelf !== currentShelf) {
-      currentShelf = item.shelf;
-      container.innerHTML += `<h2>${currentShelf}</h2>`;
-    }
-
-    container.innerHTML += `
-      <div>
-        ${item.color} – ${item.material_type} – ${item.package}:
-        <strong>${item.quantity}</strong>
-      </div>
-    `;
-  });
-}
