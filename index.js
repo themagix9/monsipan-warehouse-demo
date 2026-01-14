@@ -1,11 +1,23 @@
 import express from "express";
 import pkg from "pg";
-const { Pool } = pkg;
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
+const { Pool } = pkg;
 const app = express();
 app.use(express.json());
 
-// 🔐 DB Config aus ENV
+/* =========================
+   CONFIG
+========================= */
+
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
+
+/* =========================
+   DATABASE
+========================= */
+
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
   port: process.env.DB_PORT || 5432,
@@ -14,7 +26,27 @@ const pool = new Pool({
   database: process.env.DB_NAME,
 });
 
-// 🧪 DB-Test + Initialisierung
+/* =========================
+   AUTH MIDDLEWARE
+========================= */
+
+function auth(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header) return res.sendStatus(401);
+
+  try {
+    const token = header.split(" ")[1];
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    res.sendStatus(401);
+  }
+}
+
+/* =========================
+   DB INIT
+========================= */
+
 async function initDb() {
   const client = await pool.connect();
   try {
@@ -27,16 +59,33 @@ async function initDb() {
         active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        barcode TEXT UNIQUE NOT NULL,
+        name TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS stock (
+        product_id INT PRIMARY KEY REFERENCES products(id),
+        quantity INT NOT NULL DEFAULT 0
+      );
+
+      CREATE TABLE IF NOT EXISTS movements (
+        id SERIAL PRIMARY KEY,
+        product_id INT REFERENCES products(id),
+        change INT NOT NULL,
+        type TEXT NOT NULL,
+        user_id INT REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT NOW()
+      );
     `);
-    console.log("DB ready & users table ensured");
+
+    console.log("DB ready & tables ensured");
   } finally {
     client.release();
   }
 }
-
-await initDb();
-
-import bcrypt from "bcrypt";
 
 async function ensureAdmin() {
   const res = await pool.query(
@@ -47,34 +96,32 @@ async function ensureAdmin() {
   if (res.rowCount === 0) {
     const hash = await bcrypt.hash("admin123", 10);
     await pool.query(
-      "INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)",
+      "INSERT INTO users (username, password_hash, role) VALUES ($1,$2,$3)",
       ["admin", hash, "admin"]
     );
-    console.log("Default admin user created (admin / admin123)");
+    console.log("Default admin created (admin / admin123)");
   }
 }
 
+/* =========================
+   STARTUP
+========================= */
+
+await initDb();
 await ensureAdmin();
 
+/* =========================
+   ROUTES
+========================= */
 
-// 🟢 Health-Check inkl. DB
 app.get("/health", async (_req, res) => {
   try {
     await pool.query("SELECT 1");
     res.json({ status: "ok", db: "connected" });
-  } catch (e) {
+  } catch {
     res.status(500).json({ status: "error", db: "down" });
   }
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Backend listening on ${PORT}`);
-});
-
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 app.post("/login", async (req, res) => {
   const { username, password } = req.body;
@@ -102,4 +149,65 @@ app.post("/login", async (req, res) => {
   );
 
   res.json({ token });
+});
+
+app.post("/scan", auth, async (req, res) => {
+  const { barcode, type } = req.body;
+  if (!barcode || !["IN", "OUT"].includes(type)) {
+    return res.status(400).json({ error: "Invalid scan" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    let product = await client.query(
+      "SELECT * FROM products WHERE barcode = $1",
+      [barcode]
+    );
+
+    if (product.rowCount === 0) {
+      product = await client.query(
+        "INSERT INTO products (barcode) VALUES ($1) RETURNING *",
+        [barcode]
+      );
+    }
+
+    const productId = product.rows[0].id;
+    const delta = type === "IN" ? 1 : -1;
+
+    await client.query(
+      `
+      INSERT INTO stock (product_id, quantity)
+      VALUES ($1, GREATEST($2,0))
+      ON CONFLICT (product_id)
+      DO UPDATE SET quantity = GREATEST(stock.quantity + $2,0)
+      `,
+      [productId, delta]
+    );
+
+    await client.query(
+      `
+      INSERT INTO movements (product_id, change, type, user_id)
+      VALUES ($1,$2,$3,$4)
+      `,
+      [productId, delta, type, req.user.id]
+    );
+
+    await client.query("COMMIT");
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: "scan failed" });
+  } finally {
+    client.release();
+  }
+});
+
+/* =========================
+   SERVER
+========================= */
+
+app.listen(PORT, () => {
+  console.log(`Backend listening on ${PORT}`);
 });
