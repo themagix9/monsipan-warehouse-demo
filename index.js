@@ -43,6 +43,30 @@ function auth(req, res, next) {
   }
 }
 
+// ===============================
+// ADMIN: Produkt-Stammdaten
+// ===============================
+app.get("/admin/products", auth, async (req, res) => {
+  // 🔒 Nur Admins
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const result = await pool.query(`
+    SELECT
+      id,
+      name,
+      material_type,
+      default_package,
+      active
+    FROM products
+    ORDER BY name
+  `);
+
+  res.json(result.rows);
+});
+
+
 /* =========================
    DB INIT
 ========================= */
