@@ -78,18 +78,19 @@ app.put("/admin/products/:id", auth, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { default_package, active } = req.body;
+  const { name, default_package, active } = req.body;
 
   try {
     await pool.query(
       `
       UPDATE products
       SET
-        default_package = $1,
-        active = $2
-      WHERE id = $3
+        name = $1,
+        default_package = $2,
+        active = $3
+      WHERE id = $4
       `,
-      [default_package, active, id]
+      [name, default_package, active, id]
     );
 
     res.json({ ok: true });
