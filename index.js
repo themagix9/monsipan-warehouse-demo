@@ -53,19 +53,51 @@ app.get("/admin/products", auth, async (req, res) => {
   }
 
   const result = await pool.query(`
-    SELECT
-      id,
-      name,
-      material_type,
-      default_package,
-      active
-    FROM products
-    ORDER BY name
-  `);
+  SELECT
+    p.id,
+    p.name,
+    p.material_type,
+    p.default_package,
+    p.active,
+    COALESCE(SUM(s.quantity), 0) AS total_quantity
+  FROM products p
+  LEFT JOIN stock s ON s.product_id = p.id
+  GROUP BY p.id
+  ORDER BY total_quantity DESC
+`);
 
   res.json(result.rows);
 });
 
+// ===============================
+// ADMIN: Produkt aktualisieren
+// ===============================
+app.put("/admin/products/:id", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { id } = req.params;
+  const { default_package, active } = req.body;
+
+  try {
+    await pool.query(
+      `
+      UPDATE products
+      SET
+        default_package = $1,
+        active = $2
+      WHERE id = $3
+      `,
+      [default_package, active, id]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Admin product update failed:", err);
+    res.status(500).json({ error: "update failed" });
+  }
+});
 
 /* =========================
    DB INIT
