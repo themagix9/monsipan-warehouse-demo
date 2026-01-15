@@ -390,7 +390,10 @@ app.post("/login", async (req, res) => {
     { expiresIn: "8h" }
   );
 
-  res.json({ token });
+  res.json({
+  token,
+  must_change_password: user.must_change_password
+});
 });
 
 app.post("/scan", auth, async (req, res) => {
