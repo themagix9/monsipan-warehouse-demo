@@ -119,10 +119,24 @@ app.post("/admin/users", auth, async (req, res) => {
 
     await pool.query(
       `
-      INSERT INTO users (username, password_hash, role, active)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO users (
+  username,
+  password_hash,
+  first_name,
+  last_name,
+  role,
+  active
+)
+VALUES ($1, $2, $3, $4, $5, $6)
       `,
-      [username, hash, role, active ?? true]
+      [
+  username,
+  passwordHash,
+  first_name,
+  last_name,
+  role,
+  active
+]
     );
 
     res.json({ ok: true });
