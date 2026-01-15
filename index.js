@@ -154,41 +154,43 @@ app.get("/admin/users", auth, async (req, res) => {
   `);
 
   res.json(result.rows);
+});
 
-  // ===============================
-  // ADMIN: User bearbeiten
-  // ===============================
-  app.put("/admin/users/:id", auth, async (req, res) => {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ error: "Forbidden" });
-    }
+// ===============================
+// ADMIN: User bearbeiten
+// ===============================
+app.put("/admin/users/:id", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
 
-    const check = await pool.query(
-      "SELECT role FROM users WHERE id = $1",
-      [req.params.id]
-    );
+  const check = await pool.query(
+    "SELECT role FROM users WHERE id = $1",
+    [req.params.id]
+  );
 
-    if (check.rows[0]?.role === "admin") {
-      return res.status(403).json({ error: "Admin user cannot be modified" });
-    }
+  if (check.rows[0]?.role === "admin") {
+    return res.status(403).json({ error: "Admin user cannot be modified" });
+  }
 
-    const { first_name, last_name, role, active } = req.body;
+  const { first_name, last_name, role, active } = req.body;
 
-    await pool.query(
-      `
-      UPDATE users
-      SET
-        first_name = $1,
-        last_name = $2,
-        role = $3,
-        active = $4
-      WHERE id = $5
-      `,
-      [first_name, last_name, role, active, req.params.id]
-    );
+  await pool.query(
+    `
+    UPDATE users
+    SET
+      first_name = $1,
+      last_name = $2,
+      role = $3,
+      active = $4
+    WHERE id = $5
+    `,
+    [first_name, last_name, role, active, req.params.id]
+  );
 
-    res.json({ ok: true });
-  });
+  res.json({ ok: true });
+});
+
 
 /* =========================
    DB INIT
