@@ -100,6 +100,39 @@ app.put("/admin/products/:id", auth, async (req, res) => {
   }
 });
 
+// ===============================
+// ADMIN: User anlegen
+// ===============================
+app.post("/admin/users", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const { username, password, role, active } = req.body;
+
+  if (!username || !password || !role) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+
+    await pool.query(
+      `
+      INSERT INTO users (username, password_hash, role, active)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [username, hash, role, active ?? true]
+    );
+
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("Create user failed:", e);
+    res.status(500).json({ error: "create failed" });
+  }
+});
+
+
 /* =========================
    DB INIT
 ========================= */
