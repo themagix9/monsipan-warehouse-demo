@@ -235,25 +235,14 @@ app.post("/admin/users/:id/reset-password", auth, async (req, res) => {
   res.json({ ok: true, password: defaultPassword });
 });
 
-/* =========================
-   User PW Change
-========================= */
+// ============================
+// USER: Passwort ändern
+// ============================
+app.post("/me/change-password", auth, async (req, res) => {
+  const { newPassword } = req.body;
 
-app.post("/user/change-password", auth, async (req, res) => {
-  const { oldPassword, newPassword } = req.body;
-
-  const result = await pool.query(
-    "SELECT password_hash FROM users WHERE id = $1",
-    [req.user.id]
-  );
-
-  const valid = await bcrypt.compare(
-    oldPassword,
-    result.rows[0].password_hash
-  );
-
-  if (!valid) {
-    return res.status(400).json({ error: "Wrong password" });
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: "Password too short" });
   }
 
   const hash = await bcrypt.hash(newPassword, 10);
@@ -270,6 +259,29 @@ app.post("/user/change-password", auth, async (req, res) => {
   );
 
   res.json({ ok: true });
+});
+
+
+// ============================
+// USER: Eigene Daten abrufen
+// ============================
+app.get("/me", auth, async (req, res) => {
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      username,
+      first_name,
+      last_name,
+      role,
+      must_change_password
+    FROM users
+    WHERE id = $1
+    `,
+    [req.user.id]
+  );
+
+  res.json(result.rows[0]);
 });
 
 
