@@ -218,7 +218,7 @@ app.post("/admin/users/:id/reset-password", auth, async (req, res) => {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  const defaultPassword = "Start123!";
+  const defaultPassword = "Monsipan123!";
   const hash = await bcrypt.hash(defaultPassword, 10);
 
   await pool.query(
