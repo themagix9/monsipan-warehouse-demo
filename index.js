@@ -108,7 +108,15 @@ app.post("/admin/users", auth, async (req, res) => {
     return res.status(403).json({ error: "Forbidden" });
   }
 
-  const { username, password, role, active } = req.body;
+  const {
+  username,
+  password,
+  first_name,
+  last_name,
+  role,
+  active
+} = req.body;
+
 
   if (!username || !password || !role) {
     return res.status(400).json({ error: "Missing fields" });
@@ -130,12 +138,12 @@ app.post("/admin/users", auth, async (req, res) => {
 VALUES ($1, $2, $3, $4, $5, $6)
       `,
       [
-  username,
-  passwordHash,
-  first_name,
-  last_name,
-  role,
-  active
+  username,  // $1 → username
+  hash,      // $2 → password_hash ✅
+  first_name,// $3 → first_name
+  last_name, // $4 → last_name
+  role,      // $5 → role
+  active     // $6 → active
 ]
     );
 
