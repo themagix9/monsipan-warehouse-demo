@@ -132,6 +132,54 @@ app.post("/admin/users", auth, async (req, res) => {
   }
 });
 
+// ===============================
+// ADMIN: Userliste
+// ===============================
+app.get("/admin/users", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const result = await pool.query(`
+    SELECT
+      id,
+      username,
+      first_name,
+      last_name,
+      role,
+      active,
+      created_at
+    FROM users
+    ORDER BY created_at ASC
+  `);
+
+  res.json(result.rows);
+
+  // ===============================
+  // ADMIN: User bearbeiten
+  // ===============================
+  app.put("/admin/users/:id", auth, async (req, res) => {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const { first_name, last_name, role, active } = req.body;
+
+    await pool.query(
+      `
+      UPDATE users
+      SET
+        first_name = $1,
+        last_name = $2,
+        role = $3,
+        active = $4
+      WHERE id = $5
+      `,
+      [first_name, last_name, role, active, req.params.id]
+    );
+
+    res.json({ ok: true });
+  });
 
 /* =========================
    DB INIT
