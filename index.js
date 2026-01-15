@@ -213,6 +213,65 @@ app.put("/admin/users/:id", auth, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/admin/users/:id/reset-password", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const defaultPassword = "Start123!";
+  const hash = await bcrypt.hash(defaultPassword, 10);
+
+  await pool.query(
+    `
+    UPDATE users
+    SET
+      password_hash = $1,
+      must_change_password = true
+    WHERE id = $2
+    `,
+    [hash, req.params.id]
+  );
+
+  res.json({ ok: true, password: defaultPassword });
+});
+
+/* =========================
+   User PW Change
+========================= */
+
+app.post("/user/change-password", auth, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+
+  const result = await pool.query(
+    "SELECT password_hash FROM users WHERE id = $1",
+    [req.user.id]
+  );
+
+  const valid = await bcrypt.compare(
+    oldPassword,
+    result.rows[0].password_hash
+  );
+
+  if (!valid) {
+    return res.status(400).json({ error: "Wrong password" });
+  }
+
+  const hash = await bcrypt.hash(newPassword, 10);
+
+  await pool.query(
+    `
+    UPDATE users
+    SET
+      password_hash = $1,
+      must_change_password = false
+    WHERE id = $2
+    `,
+    [hash, req.user.id]
+  );
+
+  res.json({ ok: true });
+});
+
 
 /* =========================
    DB INIT
