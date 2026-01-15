@@ -291,17 +291,20 @@ app.post("/me/change-password", auth, async (req, res) => {
   const { password } = req.body;
 
   if (!password || password.length < 8) {
-    return res.status(400).json({ error: "invalid password" });
+    return res.status(400).json({ error: "Password too short" });
   }
 
   const hash = await bcrypt.hash(password, 10);
 
-  await pool.query(`
+  await pool.query(
+    `
     UPDATE users
     SET password_hash = $1,
         must_change_password = false
     WHERE id = $2
-  `, [hash, req.user.id]);
+    `,
+    [hash, req.user.id]
+  );
 
   res.json({ ok: true });
 });
