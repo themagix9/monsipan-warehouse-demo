@@ -216,17 +216,19 @@ app.listen(PORT, () => {
    Lagerbestand-Auswahl
 ========================= */
 
-app.get("/stock", auth, async (_req, res) => {
+app.get("/stock", auth, async (req, res) => {
   const result = await pool.query(`
     SELECT
+      p.id,
+      p.barcode,
       p.name,
       p.color,
       p.material_type,
       p.package,
       p.shelf,
-      s.quantity
-    FROM stock s
-    JOIN products p ON p.id = s.product_id
+      COALESCE(s.quantity, 0) AS quantity
+    FROM products p
+    LEFT JOIN stock s ON s.product_id = p.id
     ORDER BY p.shelf, p.color, p.material_type
   `);
 
