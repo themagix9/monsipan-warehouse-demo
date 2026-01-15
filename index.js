@@ -163,6 +163,15 @@ app.get("/admin/users", auth, async (req, res) => {
       return res.status(403).json({ error: "Forbidden" });
     }
 
+    const check = await pool.query(
+      "SELECT role FROM users WHERE id = $1",
+      [req.params.id]
+    );
+
+    if (check.rows[0]?.role === "admin") {
+      return res.status(403).json({ error: "Admin user cannot be modified" });
+    }
+
     const { first_name, last_name, role, active } = req.body;
 
     await pool.query(
