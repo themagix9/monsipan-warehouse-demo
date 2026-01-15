@@ -487,26 +487,21 @@ app.listen(PORT, () => {
 ========================= */
 
 app.get("/stock", auth, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        p.id,
-        p.barcode,
-        p.name,
-        p.color,
-        p.material_type,
-        p.package,
-        p.shelf,
-        COALESCE(s.quantity, 0) AS quantity
-      FROM products p
-      LEFT JOIN stock s ON s.product_id = p.id
-      WHERE p.active = 1
-      ORDER BY p.shelf, p.color, p.material_type
-    `);
+  const result = await pool.query(`
+    SELECT
+      p.id,
+      p.barcode,
+      p.name,
+      p.color,
+      p.material_type,
+      p.package,
+      p.shelf,
+      COALESCE(s.quantity, 0) AS quantity
+    FROM products p
+    LEFT JOIN stock s ON s.product_id = p.id
+    WHERE p.active = 1
+    ORDER BY p.shelf, p.color, p.material_type
+  `);
 
-    res.json(result.rows);
-  } catch (err) {
-    console.error("GET /stock failed:", err);
-    res.status(500).json({ error: "SERVER_ERROR" });
-  }
+  res.json(result.rows);
 });
