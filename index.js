@@ -32,14 +32,14 @@ const pool = new Pool({
 
 function auth(req, res, next) {
   const header = req.headers.authorization;
-  if (!header) return res.sendStatus(401);
+  if (!header) return res.status(401).json({ error: "UNAUTHORIZED" });
 
   try {
     const token = header.split(" ")[1];
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
-    res.sendStatus(401);
+    return res.status(401).json({ error: "UNAUTHORIZED" });
   }
 }
 
@@ -334,8 +334,10 @@ async function initDb() {
       );
 
       CREATE TABLE IF NOT EXISTS stock (
-        product_id INT PRIMARY KEY REFERENCES products(id),
-        quantity INT NOT NULL DEFAULT 0
+        product_id INT REFERENCES products(id),
+        location TEXT NOT NULL DEFAULT 'Anlieferung',
+        quantity INT NOT NULL DEFAULT 0,
+        PRIMARY KEY (product_id, location)
       );
 
       CREATE TABLE IF NOT EXISTS movements (
