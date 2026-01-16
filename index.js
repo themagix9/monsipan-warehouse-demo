@@ -549,9 +549,17 @@ app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
       `
       SELECT
         id,
-        name
+        name,
+        color,
+        material_type,
+        COALESCE(
+          NULLIF(regexp_replace(package, '[^0-9]', '', 'g'), '')::INTEGER,
+          default_package
+        ) AS package
       FROM products
       WHERE barcode = $1
+        AND (active IS TRUE OR active = 1)
+      LIMIT 1
       `,
       [barcode]
     );
