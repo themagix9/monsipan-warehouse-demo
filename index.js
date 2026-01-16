@@ -422,52 +422,68 @@ app.post("/login", async (req, res) => {
 });
 
 app.post("/scan", auth, async (req, res) => {
-  const { barcode, type } = req.body;
+  const { barcode, type, location, qty } = req.body;
+
   if (!barcode || !["IN", "OUT"].includes(type)) {
     return res.status(400).json({ error: "Invalid scan" });
   }
+
+  const loc = (location || "Anlieferung").trim();
+  const amount = Number.isFinite(Number(qty)) && Number(qty) > 0 ? Number(qty) : 1;
+  const delta = type === "IN" ? amount : -amount;
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    let product = await client.query(
-      "SELECT * FROM products WHERE barcode = $1",
+    // Produkt holen (nur aktive)
+    const productRes = await client.query(
+      `
+      SELECT id, active
+      FROM products
+      WHERE barcode = $1
+      LIMIT 1
+      `,
       [barcode]
     );
 
-    if (product.rowCount === 0) {
-      product = await client.query(
-        "INSERT INTO products (barcode) VALUES ($1) RETURNING *",
-        [barcode]
-      );
+    if (productRes.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
     }
 
-    const productId = product.rows[0].id;
-    const delta = type === "IN" ? 1 : -1;
+    const product = productRes.rows[0];
+    if (!(product.active === true || product.active === 1)) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "PRODUCT_INACTIVE" });
+    }
 
-    await client.query(
+    // Bestand upserten pro (product_id, location)
+    const stockRes = await client.query(
       `
-      INSERT INTO stock (product_id, quantity)
-      VALUES ($1, GREATEST($2,0))
-      ON CONFLICT (product_id)
-      DO UPDATE SET quantity = GREATEST(stock.quantity + $2,0)
+      INSERT INTO stock (product_id, location, quantity)
+      VALUES ($1, $2, GREATEST($3, 0))
+      ON CONFLICT (product_id, location)
+      DO UPDATE SET quantity = GREATEST(stock.quantity + $3, 0)
+      RETURNING quantity
       `,
-      [productId, delta]
+      [product.id, loc, delta]
     );
 
+    // optional: movement log (ohne location bei dir aktuell)
     await client.query(
       `
       INSERT INTO movements (product_id, change, type, user_id)
       VALUES ($1,$2,$3,$4)
       `,
-      [productId, delta, type, req.user.id]
+      [product.id, delta, type, req.user.id]
     );
 
     await client.query("COMMIT");
-    res.json({ ok: true });
+    res.json({ ok: true, new_quantity: stockRes.rows[0].quantity });
   } catch (e) {
     await client.query("ROLLBACK");
+    console.error("scan failed:", e);
     res.status(500).json({ error: "scan failed" });
   } finally {
     client.release();
@@ -489,20 +505,21 @@ app.listen(PORT, () => {
 app.get("/stock", auth, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT
-        p.id,
-        p.barcode,
-        p.name,
-        p.color,
-        p.material_type,
-        p.package,
-        p.shelf,
-        COALESCE(s.quantity, 0) AS quantity
-      FROM products p
-      LEFT JOIN stock s ON s.product_id = p.id
-      WHERE p.active IS TRUE
-      ORDER BY p.shelf, p.color, p.material_type
-    `);
+  SELECT
+    p.id,
+    p.barcode,
+    p.name,
+    p.color,
+    p.material_type,
+    COALESCE(p.package, p.default_package) AS package,
+    p.shelf,
+    COALESCE(SUM(s.quantity), 0) AS quantity
+  FROM products p
+  LEFT JOIN stock s ON s.product_id = p.id
+  WHERE p.active IS TRUE OR p.active = 1
+  GROUP BY p.id
+  ORDER BY p.shelf, p.color, p.material_type
+`);
 
     res.json(result.rows);
   } catch (err) {
