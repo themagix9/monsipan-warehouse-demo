@@ -492,13 +492,6 @@ app.post("/scan", auth, async (req, res) => {
   }
 });
 
-/* =========================
-   SERVER
-========================= */
-
-app.listen(PORT, () => {
-  console.log(`Backend listening on ${PORT}`);
-});
 
 /* =========================
    Lagerbestand-Auswahl
@@ -507,32 +500,32 @@ app.listen(PORT, () => {
 app.get("/stock", auth, async (req, res) => {
   try {
     const result = await pool.query(`
-  SELECT
-    p.id,
-    p.barcode,
-    p.name,
-    p.color,
-    p.material_type,
-    COALESCE(
-      NULLIF(regexp_replace(p.package, '[^0-9]', '', 'g'), '')::INTEGER,
-      p.default_package
-    ) AS package,
-    p.shelf,
-    COALESCE(SUM(s.quantity), 0) AS quantity
-  FROM products p
-  LEFT JOIN stock s ON s.product_id = p.id
-  WHERE p.active IS TRUE
-  GROUP BY
-    p.id,
-    p.barcode,
-    p.name,
-    p.color,
-    p.material_type,
-    p.package,
-    p.default_package,
-    p.shelf
-  ORDER BY p.shelf, p.color, p.material_type
-`);
+      SELECT
+        p.id,
+        p.barcode,
+        p.name,
+        p.color,
+        p.material_type,
+        COALESCE(
+          NULLIF(regexp_replace(p.package, '[^0-9]', '', 'g'), '')::INTEGER,
+          p.default_package
+        ) AS package,
+        p.shelf,
+        COALESCE(SUM(s.quantity), 0) AS quantity
+      FROM products p
+      LEFT JOIN stock s ON s.product_id = p.id
+      WHERE p.active IS TRUE
+      GROUP BY
+        p.id,
+        p.barcode,
+        p.name,
+        p.color,
+        p.material_type,
+        p.package,
+        p.default_package,
+        p.shelf
+      ORDER BY p.shelf, p.color, p.material_type
+    `);
 
     res.json(result.rows);
   } catch (err) {
@@ -552,27 +545,31 @@ app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
         barcode,
         name,
         color,
-        material_type,
-        COALESCE(
-          NULLIF(regexp_replace(package, '[^0-9]', '', 'g'), '')::INTEGER,
-          default_package
-        ) AS package,
-        shelf
+        material_type
       FROM products
       WHERE barcode = $1
-        AND COALESCE(active, true) = true
+        AND active IS TRUE
       LIMIT 1
       `,
       [barcode]
     );
 
-    if (result.rowCount === 0) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
     }
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error("GET product by barcode failed:", err);
+    console.error("GET /products/by-barcode failed:", err);
     res.status(500).json({ error: "SERVER_ERROR" });
   }
+});
+
+
+/* =========================
+   SERVER
+========================= */
+
+app.listen(PORT, () => {
+  console.log(`Backend listening on ${PORT}`);
 });
