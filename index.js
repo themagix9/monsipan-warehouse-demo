@@ -546,14 +546,17 @@ app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
     const result = await pool.query(
       `
       SELECT
-        id,
-        name,
-        material_type,
-        color,
-        package
-      FROM products
-      WHERE barcode = $1
-        AND active IS TRUE
+  id,
+  name,
+  material_type,
+  color,
+  COALESCE(
+    NULLIF(regexp_replace(package, '[^0-9]', '', 'g'), '')::INTEGER,
+    default_package
+  ) AS package
+FROM products
+WHERE barcode = $1
+  AND active IS TRUE
       `,
       [barcode]
     );
