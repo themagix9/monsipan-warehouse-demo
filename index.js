@@ -549,22 +549,24 @@ app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
       `
       SELECT
         id,
+        barcode,
         name,
         color,
         material_type,
         COALESCE(
           NULLIF(regexp_replace(package, '[^0-9]', '', 'g'), '')::INTEGER,
           default_package
-        ) AS package
+        ) AS package,
+        shelf
       FROM products
       WHERE barcode = $1
-        AND (active IS TRUE OR active = 1)
+        AND COALESCE(active, true) = true
       LIMIT 1
       `,
       [barcode]
     );
 
-    if (result.rows.length === 0) {
+    if (result.rowCount === 0) {
       return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
     }
 
