@@ -511,13 +511,21 @@ app.get("/stock", auth, async (req, res) => {
     p.name,
     p.color,
     p.material_type,
-    COALESCE(p.package, p.default_package) AS package,
+    COALESCE(NULLIF(p.package, '')::INTEGER, p.default_package) AS package,
     p.shelf,
     COALESCE(SUM(s.quantity), 0) AS quantity
   FROM products p
   LEFT JOIN stock s ON s.product_id = p.id
   WHERE p.active IS TRUE OR p.active = 1
-  GROUP BY p.id
+  GROUP BY
+    p.id,
+    p.barcode,
+    p.name,
+    p.color,
+    p.material_type,
+    p.package,
+    p.default_package,
+    p.shelf
   ORDER BY p.shelf, p.color, p.material_type
 `);
 
