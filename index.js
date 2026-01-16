@@ -538,3 +538,33 @@ app.get("/stock", auth, async (req, res) => {
     res.status(500).json({ error: "SERVER_ERROR" });
   }
 });
+
+app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
+  const { barcode } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        name,
+        material_type,
+        color,
+        package
+      FROM products
+      WHERE barcode = $1
+        AND active IS TRUE
+      `,
+      [barcode]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("GET product by barcode failed:", err);
+    res.status(500).json({ error: "SERVER_ERROR" });
+  }
+});
