@@ -512,7 +512,6 @@ app.get("/stock", auth, async (req, res) => {
         p.material_type,
         p.color,
 
-        -- Packungsgröße sauber ermitteln
         COALESCE(
           NULLIF(regexp_replace(p.package, '[^0-9]', '', 'g'), '')::INT,
           p.default_package,
