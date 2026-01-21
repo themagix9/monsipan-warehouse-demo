@@ -430,7 +430,12 @@ app.post("/scan", auth, async (req, res) => {
     return res.status(400).json({ error: "Invalid scan" });
   }
 
-  const loc = (location || "Anlieferung").trim();
+  // 🔐 Pflichtprüfung für Einbuchungen
+if (type === "IN" && (!location || !location.trim())) {
+  return res.status(400).json({ error: "LOCATION_REQUIRED" });
+}
+
+const loc = location.trim();
   const amount = Number.isFinite(Number(qty)) && Number(qty) > 0 ? Number(qty) : 1;
   const delta = type === "IN" ? amount : -amount;
 
