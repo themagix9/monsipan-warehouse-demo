@@ -511,16 +511,9 @@ app.get("/stock", auth, async (req, res) => {
         p.name,
         p.material_type,
         p.color,
-
-        COALESCE(
-          NULLIF(regexp_replace(p.package, '[^0-9]', '', 'g'), '')::INT,
-          p.default_package,
-          0
-        ) AS package,
-
+        p.package,
         s.location,
         s.quantity
-
       FROM stock s
       JOIN products p ON p.id = s.product_id
       WHERE p.active = 1
@@ -530,10 +523,11 @@ app.get("/stock", auth, async (req, res) => {
 
     res.json(result.rows);
   } catch (err) {
-    console.error("STOCK LOAD ERROR:", err.message);
+    console.error("STOCK LOAD ERROR:", err);
     res.status(500).json({ error: "STOCK_LOAD_FAILED" });
   }
 });
+
 
 
 app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
