@@ -570,6 +570,6 @@ app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
    SERVER
 ========================= */
 
-app.listen(PORT, () => {
-  console.log(`Backend listening on ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Backend listening on 0.0.0.0:${PORT}`);
 });
