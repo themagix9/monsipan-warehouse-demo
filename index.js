@@ -509,33 +509,22 @@ app.get("/stock", auth, async (req, res) => {
         p.id,
         p.barcode,
         p.name,
-        p.color,
         p.material_type,
-        COALESCE(
-          NULLIF(regexp_replace(p.package, '[^0-9]', '', 'g'), '')::INTEGER,
-          p.default_package
-        ) AS package,
-        p.shelf,
-        COALESCE(SUM(s.quantity), 0) AS quantity
-      FROM products p
-      LEFT JOIN stock s ON s.product_id = p.id
-      WHERE p.active IS TRUE
-      GROUP BY
-        p.id,
-        p.barcode,
-        p.name,
         p.color,
-        p.material_type,
         p.package,
-        p.default_package,
-        p.shelf
-      ORDER BY p.shelf, p.color, p.material_type
+        s.location,
+        s.quantity
+      FROM stock s
+      JOIN products p ON p.id = s.product_id
+      WHERE p.active = 1
+        AND s.quantity <> 0
+      ORDER BY s.location, p.name;
     `);
 
     res.json(result.rows);
   } catch (err) {
-    console.error("GET /stock failed:", err);
-    res.status(500).json({ error: "SERVER_ERROR" });
+    console.error("STOCK LOAD ERROR", err);
+    res.status(500).json({ error: "STOCK_LOAD_FAILED" });
   }
 });
 
