@@ -507,17 +507,11 @@ app.get("/stock", auth, async (req, res) => {
     const result = await pool.query(`
       SELECT
         p.id,
-        p.barcode,
         p.name,
-        p.material_type,
-        p.color,
-        p.package,
         s.location,
         s.quantity
       FROM stock s
       JOIN products p ON p.id = s.product_id
-      WHERE p.active = 1
-        AND s.quantity <> 0
       ORDER BY s.location, p.name;
     `);
 
