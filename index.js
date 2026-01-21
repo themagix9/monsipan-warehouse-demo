@@ -560,6 +560,67 @@ app.get("/products/by-barcode/:barcode", auth, async (req, res) => {
   }
 });
 
+/* =========================
+   Produktdaten für die Produktseite laden
+========================= */
+
+app.get("/products/by-id/:id", auth, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        id,
+        barcode,
+        name,
+        material_type,
+        color
+      FROM products
+      WHERE id = $1
+        AND active = 1
+      `,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error("GET /products/by-id ERROR:", err);
+    res.status(500).json({ error: "PRODUCT_LOAD_FAILED" });
+  }
+});
+
+/* =========================
+   Bestand dieses Produkts – pro Lagerort
+========================= */
+
+app.get("/stock/by-product/:id", auth, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        location,
+        quantity
+      FROM stock
+      WHERE product_id = $1
+        AND quantity <> 0
+      ORDER BY location
+      `,
+      [id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET /stock/by-product ERROR:", err);
+    res.status(500).json({ error: "STOCK_LOAD_FAILED" });
+  }
+});
 
 /* =========================
    SERVER
