@@ -508,6 +508,9 @@ app.get("/stock", auth, async (req, res) => {
       SELECT
         p.id,
         p.name,
+        p.material_type,
+        p.package,
+        p.color,
         s.location,
         s.quantity
       FROM stock s
