@@ -423,79 +423,116 @@ app.post("/login", async (req, res) => {
 });
 });
 
+/* =========================
+   Scan/Buchung
+========================= */
+
 app.post("/scan", auth, async (req, res) => {
   const { barcode, type, location, qty } = req.body;
 
-  if (!barcode || !["IN", "OUT"].includes(type)) {
-    return res.status(400).json({ error: "Invalid scan" });
+  if (!barcode || !type || !qty || qty < 1) {
+    return res.status(400).json({ error: "INVALID_INPUT" });
   }
 
-  // 🔐 Pflichtprüfung für Einbuchungen
-if (type === "IN" && (!location || !location.trim())) {
-  return res.status(400).json({ error: "LOCATION_REQUIRED" });
-}
-
-const loc = location.trim();
-  const amount = Number.isFinite(Number(qty)) && Number(qty) > 0 ? Number(qty) : 1;
-  const delta = type === "IN" ? amount : -amount;
-
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-
-    // Produkt holen (nur aktive)
-    const productRes = await client.query(
-      `
-      SELECT id, active
-      FROM products
-      WHERE barcode = $1
-      LIMIT 1
-      `,
+    // 🔍 Produkt holen
+    const prodRes = await pool.query(
+      "SELECT id FROM products WHERE barcode = $1 AND active = true",
       [barcode]
     );
 
-    if (productRes.rowCount === 0) {
-      await client.query("ROLLBACK");
+    if (prodRes.rowCount === 0) {
       return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
     }
 
-    const product = productRes.rows[0];
-    if (!(product.active === true || product.active === 1)) {
-      await client.query("ROLLBACK");
-      return res.status(400).json({ error: "PRODUCT_INACTIVE" });
+    const productId = prodRes.rows[0].id;
+
+    /* =========================
+       EINBUCHEN
+    ========================= */
+    if (type === "IN") {
+      if (!location) {
+        return res.status(400).json({ error: "LOCATION_REQUIRED" });
+      }
+
+      await pool.query(
+        `
+        INSERT INTO stock (product_id, location, quantity)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (product_id, location)
+        DO UPDATE SET quantity = stock.quantity + EXCLUDED.quantity
+        `,
+        [productId, location, qty]
+      );
+
+      return res.json({ success: true });
     }
 
-    // Bestand upserten pro (product_id, location)
-    const stockRes = await client.query(
-      `
-      INSERT INTO stock (product_id, location, quantity)
-      VALUES ($1, $2, GREATEST($3, 0))
-      ON CONFLICT (product_id, location)
-      DO UPDATE SET quantity = GREATEST(stock.quantity + $3, 0)
-      RETURNING quantity
-      `,
-      [product.id, loc, delta]
-    );
+    /* =========================
+       AUSBUCHEN
+    ========================= */
+    if (type === "OUT") {
+      if (!location) {
+        return res.status(400).json({ error: "LOCATION_REQUIRED" });
+      }
 
-    // optional: movement log (ohne location bei dir aktuell)
-    await client.query(
-      `
-      INSERT INTO movements (product_id, change, type, user_id)
-      VALUES ($1,$2,$3,$4)
-      `,
-      [product.id, delta, type, req.user.id]
-    );
+      // 🔍 aktuellen Bestand holen
+      const stockRes = await pool.query(
+        `
+        SELECT quantity
+        FROM stock
+        WHERE product_id = $1 AND location = $2
+        `,
+        [productId, location]
+      );
 
-    await client.query("COMMIT");
-    res.json({ ok: true, new_quantity: stockRes.rows[0].quantity });
-  } catch (e) {
-    await client.query("ROLLBACK");
-    console.error("scan failed:", e);
-    res.status(500).json({ error: "scan failed" });
-  } finally {
-    client.release();
+      if (stockRes.rowCount === 0) {
+        return res.status(400).json({ error: "NO_STOCK_AT_LOCATION" });
+      }
+
+      const currentQty = stockRes.rows[0].quantity;
+
+      if (currentQty < qty) {
+        return res.status(400).json({
+          error: "INSUFFICIENT_STOCK",
+          available: currentQty
+        });
+      }
+
+      // ➖ Bestand reduzieren
+      const newQty = currentQty - qty;
+
+      if (newQty === 0) {
+        // optional: Zeile löschen
+        await pool.query(
+          `
+          DELETE FROM stock
+          WHERE product_id = $1 AND location = $2
+          `,
+          [productId, location]
+        );
+      } else {
+        await pool.query(
+          `
+          UPDATE stock
+          SET quantity = $3
+          WHERE product_id = $1 AND location = $2
+          `,
+          [productId, location, newQty]
+        );
+      }
+
+      return res.json({ success: true });
+    }
+
+    return res.status(400).json({ error: "INVALID_TYPE" });
+
+  } catch (err) {
+    console.error("SCAN ERROR:", err);
+    res.status(500).json({ error: "SCAN_FAILED" });
   }
 });
+
 
 
 /* =========================
