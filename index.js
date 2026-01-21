@@ -578,7 +578,7 @@ app.get("/products/by-id/:id", auth, async (req, res) => {
         color
       FROM products
       WHERE id = $1
-        AND active = 1
+        AND active = true
       `,
       [id]
     );
