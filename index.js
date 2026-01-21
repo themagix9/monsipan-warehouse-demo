@@ -428,33 +428,29 @@ app.post("/login", async (req, res) => {
 ========================= */
 
 app.post("/scan", auth, async (req, res) => {
-  const { barcode, type, location, qty } = req.body;
-
-  if (!barcode || !type || !qty || qty < 1) {
-    return res.status(400).json({ error: "INVALID_INPUT" });
-  }
-
   try {
-    // 🔍 Produkt holen
-    const prodRes = await pool.query(
+    const { barcode, type, location, qty } = req.body;
+
+    if (!barcode || !type || !qty) {
+      return res.status(400).json({ error: "INVALID_REQUEST" });
+    }
+
+    if (!location) {
+      return res.status(400).json({ error: "LOCATION_REQUIRED" });
+    }
+
+    const productRes = await pool.query(
       "SELECT id FROM products WHERE barcode = $1 AND active = true",
       [barcode]
     );
 
-    if (prodRes.rowCount === 0) {
+    if (productRes.rows.length === 0) {
       return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
     }
 
-    const productId = prodRes.rows[0].id;
+    const productId = productRes.rows[0].id;
 
-    /* =========================
-       EINBUCHEN
-    ========================= */
     if (type === "IN") {
-      if (!location) {
-        return res.status(400).json({ error: "LOCATION_REQUIRED" });
-      }
-
       await pool.query(
         `
         INSERT INTO stock (product_id, location, quantity)
@@ -464,74 +460,54 @@ app.post("/scan", auth, async (req, res) => {
         `,
         [productId, location, qty]
       );
-
-      return res.json({ success: true });
     }
 
-    /* =========================
-       AUSBUCHEN
-    ========================= */
     if (type === "OUT") {
-      if (!location) {
-        return res.status(400).json({ error: "LOCATION_REQUIRED" });
-      }
-
-      // 🔍 aktuellen Bestand holen
-      const stockRes = await pool.query(
+      const current = await pool.query(
         `
-        SELECT quantity
-        FROM stock
+        SELECT quantity FROM stock
         WHERE product_id = $1 AND location = $2
         `,
         [productId, location]
       );
 
-      if (stockRes.rowCount === 0) {
-        return res.status(400).json({ error: "NO_STOCK_AT_LOCATION" });
+      if (
+        current.rows.length === 0 ||
+        current.rows[0].quantity < qty
+      ) {
+        return res.status(400).json({ error: "NOT_ENOUGH_STOCK" });
       }
 
-      const currentQty = stockRes.rows[0].quantity;
-
-      if (currentQty < qty) {
-        return res.status(400).json({
-          error: "INSUFFICIENT_STOCK",
-          available: currentQty
-        });
-      }
-
-      // ➖ Bestand reduzieren
-      const newQty = currentQty - qty;
-
-      if (newQty === 0) {
-        // optional: Zeile löschen
-        await pool.query(
-          `
-          DELETE FROM stock
-          WHERE product_id = $1 AND location = $2
-          `,
-          [productId, location]
-        );
-      } else {
-        await pool.query(
-          `
-          UPDATE stock
-          SET quantity = $3
-          WHERE product_id = $1 AND location = $2
-          `,
-          [productId, location, newQty]
-        );
-      }
-
-      return res.json({ success: true });
+      await pool.query(
+        `
+        UPDATE stock
+        SET quantity = quantity - $1
+        WHERE product_id = $2 AND location = $3
+        `,
+        [qty, productId, location]
+      );
     }
 
-    return res.status(400).json({ error: "INVALID_TYPE" });
+    await pool.query(
+      `
+      INSERT INTO movements (product_id, change, type, user_id)
+      VALUES ($1, $2, $3, $4)
+      `,
+      [
+        productId,
+        type === "IN" ? qty : -qty,
+        type,
+        req.user.id
+      ]
+    );
 
+    res.json({ success: true });
   } catch (err) {
     console.error("SCAN ERROR:", err);
     res.status(500).json({ error: "SCAN_FAILED" });
   }
 });
+
 
 
 
