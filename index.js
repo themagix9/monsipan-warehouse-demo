@@ -70,6 +70,70 @@ app.get("/admin/products", auth, async (req, res) => {
 });
 
 // ===============================
+// ADMIN: Produkt anlegen
+// ===============================
+app.post("/admin/products", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const {
+    barcode,
+    name,
+    color,
+    material_type,
+    package: pkg,
+    sap_number,
+    art_number,
+    min_stock,
+    active
+  } = req.body;
+
+  if (!barcode || !name) {
+    return res.status(400).json({ error: "MISSING_FIELDS" });
+  }
+
+  try {
+    await pool.query(
+      `
+      INSERT INTO products (
+        barcode,
+        name,
+        color,
+        material_type,
+        package,
+        sap_number,
+        art_number,
+        min_stock,
+        active
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `,
+      [
+        barcode,
+        name,
+        color || null,
+        material_type || null,
+        pkg || null,
+        sap_number || null,
+        art_number || null,
+        min_stock ?? 0,
+        active !== false
+      ]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ error: "BARCODE_EXISTS" });
+    }
+
+    console.error("CREATE PRODUCT ERROR:", err);
+    res.status(500).json({ error: "CREATE_FAILED" });
+  }
+});
+
+// ===============================
 // ADMIN: Produkt aktualisieren
 // ===============================
 app.put("/admin/products/:id", auth, async (req, res) => {
