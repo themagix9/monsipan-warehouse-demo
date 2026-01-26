@@ -724,7 +724,8 @@ app.get("/products/by-id/:id", auth, async (req, res) => {
         barcode,
         name,
         material_type,
-        color
+        color,
+        min_stock
       FROM products
       WHERE id = $1
         AND active = true
