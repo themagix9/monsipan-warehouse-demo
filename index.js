@@ -91,6 +91,27 @@ app.post("/admin/products", auth, async (req, res) => {
   active
 } = req.body;
 
+// ===============================
+// ADMIN: Produkt anlegen
+// ===============================
+app.post("/admin/products", auth, async (req, res) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  const {
+  barcode,
+  name,
+  color,
+  material_type,
+  package: pkg,
+  unit,
+  sap_number,
+  art_number,
+  min_stock,
+  active
+} = req.body;
+
   if (!barcode || !name) {
     return res.status(400).json({ error: "MISSING_FIELDS" });
   }
@@ -124,6 +145,51 @@ app.post("/admin/products", auth, async (req, res) => {
     min_stock ?? 0,           // $9
     active !== false          // $10
   ]
+);
+
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ error: "BARCODE_EXISTS" });
+    }
+
+    console.error("CREATE PRODUCT ERROR:", err);
+    res.status(500).json({ error: "CREATE_FAILED" });
+  }
+});
+
+
+  try {
+    await pool.query(
+  `
+  INSERT INTO products (
+  barcode,
+  name,
+  color,
+  material_type,
+  package,
+  default_package,
+  unit,
+  sap_number,
+  art_number,
+  min_stock,
+  active
+)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+  `,
+  [
+  barcode || null,        // $1
+  name,                  // $2
+  color || null,          // $3
+  material_type,          // $4 (Pflicht)
+  pkg,                   // $5 → package
+  pkg,                   // $6 → default_package 🔥
+  unit || "kg",           // $7
+  sap_number || null,     // $8
+  art_number || null,     // $9
+  min_stock ?? 0,         // $10
+  active !== false        // $11
+]
 );
 
     res.json({ ok: true });
