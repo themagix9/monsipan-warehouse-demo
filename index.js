@@ -44,9 +44,28 @@ function auth(req, res, next) {
 }
 
 // ===============================
+// User: Lockout nach PW-Change-Force
+// ===============================
+
+async function requirePasswordChanged(req, res, next) {
+  const result = await pool.query(
+    "SELECT must_change_password FROM users WHERE id = $1",
+    [req.user.id]
+  );
+
+  if (result.rows[0]?.must_change_password) {
+    return res.status(403).json({
+      error: "PASSWORD_CHANGE_REQUIRED"
+    });
+  }
+
+  next();
+}
+
+// ===============================
 // ADMIN: Produkt-Stammdaten
 // ===============================
-app.get("/admin/products", auth, requireAdmin, async (req, res) => {
+app.get("/admin/products", auth, requireAdmin, requirePasswordChanged, async (req, res) => {
 
   const result = await pool.query(`
     SELECT
@@ -550,7 +569,7 @@ app.post("/login", async (req, res) => {
    Scan/Buchung
 ========================= */
 
-app.post("/scan", auth, async (req, res) => {
+app.post("/scan", auth, requirePasswordChanged, async (req, res) => {
   try {
     const { product_id, barcode, type, location, qty } = req.body;
 
@@ -643,7 +662,7 @@ app.post("/scan", auth, async (req, res) => {
    Lagerbestand-Auswahl
 ========================= */
 
-app.get("/stock", auth, async (req, res) => {
+app.get("/stock", auth, requirePasswordChanged, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT
@@ -770,7 +789,7 @@ app.get("/stock/by-product/:id", auth, async (req, res) => {
 // ===============================
 // ALERTS: Low-Stock (für Lagerleiter)
 // ===============================
-app.get("/alerts/low-stock", auth, async (req, res) => {
+app.get("/alerts/low-stock", auth, requirePasswordChanged, async (req, res) => {
   try {
     // 🔒 Nur Lagerleiter (optional: admin ebenfalls erlauben)
     if (req.user.role !== "lagerleiter" && req.user.role !== "admin") {
