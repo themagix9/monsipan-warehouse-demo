@@ -587,6 +587,7 @@ app.get("/stock", auth, async (req, res) => {
         p.name,
         p.material_type,
         p.package,
+        p.unit,
         p.color,
         s.location,
         s.quantity
