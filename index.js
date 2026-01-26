@@ -558,9 +558,9 @@ app.post("/login", async (req, res) => {
 
 app.post("/scan", auth, async (req, res) => {
   try {
-    const { barcode, type, location, qty } = req.body;
+    const { product_id, barcode, type, location, qty } = req.body;
 
-    if (!barcode || !type || !qty) {
+    if ((!product_id && !barcode) || !type || !qty) {
       return res.status(400).json({ error: "INVALID_REQUEST" });
     }
 
@@ -568,17 +568,23 @@ app.post("/scan", auth, async (req, res) => {
       return res.status(400).json({ error: "LOCATION_REQUIRED" });
     }
 
-    const productRes = await pool.query(
-      "SELECT id FROM products WHERE barcode = $1 AND active = true",
-      [barcode]
-    );
+    let productId = product_id;
 
-    if (productRes.rows.length === 0) {
-      return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+    // 🔎 Fallback: Barcode → product_id
+    if (!productId) {
+      const productRes = await pool.query(
+        "SELECT id FROM products WHERE barcode = $1 AND active = true",
+        [barcode]
+      );
+
+      if (productRes.rows.length === 0) {
+        return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+      }
+
+      productId = productRes.rows[0].id;
     }
 
-    const productId = productRes.rows[0].id;
-
+    // 📦 EINBUCHEN
     if (type === "IN") {
       await pool.query(
         `
@@ -591,6 +597,7 @@ app.post("/scan", auth, async (req, res) => {
       );
     }
 
+    // 📤 AUSBUCHEN
     if (type === "OUT") {
       const current = await pool.query(
         `
@@ -617,6 +624,7 @@ app.post("/scan", auth, async (req, res) => {
       );
     }
 
+    // 🧾 Bewegung protokollieren
     await pool.query(
       `
       INSERT INTO movements (product_id, change, type, user_id)
@@ -636,9 +644,6 @@ app.post("/scan", auth, async (req, res) => {
     res.status(500).json({ error: "SCAN_FAILED" });
   }
 });
-
-
-
 
 /* =========================
    Lagerbestand-Auswahl
