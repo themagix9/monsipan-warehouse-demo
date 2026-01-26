@@ -53,11 +53,12 @@ app.get("/admin/products", auth, async (req, res) => {
   }
 
   const result = await pool.query(`
-  SELECT
+    SELECT
     p.id,
     p.name,
     p.material_type,
     p.default_package,
+    p.unit,                -- 🔥 HIER
     p.active,
     COALESCE(SUM(s.quantity), 0) AS total_quantity
   FROM products p
