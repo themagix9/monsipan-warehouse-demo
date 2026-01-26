@@ -78,16 +78,17 @@ app.post("/admin/products", auth, async (req, res) => {
   }
 
   const {
-    barcode,
-    name,
-    color,
-    material_type,
-    package: pkg,
-    sap_number,
-    art_number,
-    min_stock,
-    active
-  } = req.body;
+  barcode,
+  name,
+  color,
+  material_type,
+  package: pkg,
+  unit,
+  sap_number,
+  art_number,
+  min_stock,
+  active
+} = req.body;
 
   if (!barcode || !name) {
     return res.status(400).json({ error: "MISSING_FIELDS" });
@@ -95,32 +96,34 @@ app.post("/admin/products", auth, async (req, res) => {
 
   try {
     await pool.query(
-      `
-      INSERT INTO products (
-        barcode,
-        name,
-        color,
-        material_type,
-        package,
-        sap_number,
-        art_number,
-        min_stock,
-        active
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-      `,
-      [
-        barcode,
-        name,
-        color || null,
-        material_type || null,
-        pkg || null,
-        sap_number || null,
-        art_number || null,
-        min_stock ?? 0,
-        active !== false
-      ]
-    );
+  `
+  INSERT INTO products (
+    barcode,
+    name,
+    color,
+    material_type,
+    package,
+    unit,
+    sap_number,
+    art_number,
+    min_stock,
+    active
+  )
+  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+  `,
+  [
+    barcode,                 // $1
+    name,                    // $2
+    color || null,            // $3
+    material_type || null,    // $4
+    pkg || null,              // $5
+    unit || "kg",             // $6 🔥
+    sap_number || null,       // $7
+    art_number || null,       // $8
+    min_stock ?? 0,           // $9
+    active !== false          // $10
+  ]
+);
 
     res.json({ ok: true });
   } catch (err) {
