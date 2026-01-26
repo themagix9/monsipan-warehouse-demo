@@ -164,8 +164,16 @@ app.post("/admin/products", auth, async (req, res) => {
     console.error("CREATE PRODUCT ERROR:", err);
 
     if (err.code === "23505") {
-      return res.status(409).json({ error: "BARCODE_EXISTS" });
-    }
+  if (err.constraint === "products_barcode_unique") {
+    return res.status(409).json({ error: "BARCODE_EXISTS" });
+  }
+  if (err.constraint === "products_sap_unique") {
+    return res.status(409).json({ error: "SAP_EXISTS" });
+  }
+  if (err.constraint === "products_art_unique") {
+    return res.status(409).json({ error: "ART_EXISTS" });
+  }
+}
 
     res.status(500).json({ error: "CREATE_FAILED" });
   }
