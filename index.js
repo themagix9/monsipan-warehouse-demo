@@ -783,30 +783,39 @@ app.get("/alerts/low-stock", auth, async (req, res) => {
     }
 
     const result = await pool.query(`
-      SELECT
-        p.id,
-        p.name,
-        COALESCE(p.min_stock, 0) AS min_stock,
-        COALESCE(SUM(s.quantity), 0) AS total_quantity,
+  SELECT
+    p.id,
+    p.name,
+    COALESCE(p.min_stock, 0) AS min_stock,
+    COALESCE(SUM(s.quantity), 0) AS total_quantity,
 
-        -- optional: Lagerorte als JSON (nur wenn vorhanden)
-        COALESCE(
-          json_agg(
-            json_build_object('location', s.location, 'quantity', s.quantity)
-          ) FILTER (WHERE s.location IS NOT NULL),
-          '[]'::json
-        ) AS locations
+    COALESCE(BOOL_OR(s.quantity <= COALESCE(p.min_stock, 0)), false) AS any_low_location,
 
-      FROM products p
-      LEFT JOIN stock s
-        ON s.product_id = p.id
+    COALESCE(
+      json_agg(
+        json_build_object(
+          'location', s.location,
+          'quantity', s.quantity,
+          'is_low', (s.quantity <= COALESCE(p.min_stock, 0))
+        )
+      ) FILTER (WHERE s.location IS NOT NULL),
+      '[]'::json
+    ) AS locations
 
-      WHERE p.active = true
+  FROM products p
+  LEFT JOIN stock s ON s.product_id = p.id
+  WHERE p.active = true
+  GROUP BY p.id
 
-      GROUP BY p.id
-      HAVING COALESCE(SUM(s.quantity), 0) <= COALESCE(p.min_stock, 0)
-      ORDER BY (COALESCE(p.min_stock,0) - COALESCE(SUM(s.quantity),0)) DESC, p.name;
-    `);
+  HAVING
+    COALESCE(SUM(s.quantity), 0) <= COALESCE(p.min_stock, 0)
+    OR
+    COALESCE(BOOL_OR(s.quantity <= COALESCE(p.min_stock, 0)), false) = true
+
+  ORDER BY
+    (COALESCE(p.min_stock,0) - COALESCE(SUM(s.quantity),0)) DESC,
+    p.name;
+`);
 
     res.json(result.rows);
   } catch (err) {
