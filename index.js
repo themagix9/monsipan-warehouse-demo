@@ -79,27 +79,6 @@ app.post("/admin/products", auth, async (req, res) => {
   }
 
   const {
-  barcode,
-  name,
-  color,
-  material_type,
-  package: pkg,
-  unit,
-  sap_number,
-  art_number,
-  min_stock,
-  active
-} = req.body;
-
-// ===============================
-// ADMIN: Produkt anlegen
-// ===============================
-app.post("/admin/products", auth, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
-
-  const {
     barcode,
     name,
     color,
@@ -225,6 +204,50 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
   }
 });
 
+app.get("/products/by-sap/:sap", auth, async (req, res) => {
+  const { sap } = req.params;
+
+  const result = await pool.query(
+    `
+    SELECT id, barcode, name, color, material_type
+    FROM products
+    WHERE sap_number = $1
+      AND active = true
+    LIMIT 1
+    `,
+    [sap]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+  }
+
+  res.json(result.rows[0]);
+});
+
+app.get("/products/by-art/:art", auth, async (req, res) => {
+  const { art } = req.params;
+
+  const result = await pool.query(
+    `
+    SELECT id, barcode, name, color, material_type
+    FROM products
+    WHERE art_number = $1
+      AND active = true
+    LIMIT 1
+    `,
+    [art]
+  );
+
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: "PRODUCT_NOT_FOUND" });
+  }
+
+  res.json(result.rows[0]);
+});
+
+
+
 // ===============================
 // ADMIN: Produkt aktualisieren
 // ===============================
@@ -243,7 +266,7 @@ app.put("/admin/products/:id", auth, async (req, res) => {
       SET
         name = $1,
         default_package = $2,
-        unit = $3
+        unit = $3,
         active = $4
       WHERE id = $5
       `,
