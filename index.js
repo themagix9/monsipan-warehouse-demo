@@ -145,7 +145,7 @@ app.put("/admin/products/:id", auth, async (req, res) => {
   }
 
   const { id } = req.params;
-  const { name, default_package, active } = req.body;
+  const { name, default_package, unit, active } = req.body;
 
   try {
     await pool.query(
@@ -154,8 +154,9 @@ app.put("/admin/products/:id", auth, async (req, res) => {
       SET
         name = $1,
         default_package = $2,
-        active = $3
-      WHERE id = $4
+        unit = $3
+        active = $4
+      WHERE id = $5
       `,
       [name, default_package, active, id]
     );
