@@ -46,11 +46,7 @@ function auth(req, res, next) {
 // ===============================
 // ADMIN: Produkt-Stammdaten
 // ===============================
-app.get("/admin/products", auth, async (req, res) => {
-  // 🔒 Nur Admins
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.get("/admin/products", auth, requireAdmin, async (req, res) => {
 
   const result = await pool.query(`
     SELECT
@@ -73,10 +69,7 @@ app.get("/admin/products", auth, async (req, res) => {
 // ===============================
 // ADMIN: Produkt anlegen
 // ===============================
-app.post("/admin/products", auth, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.post("/admin/products", auth, requireAdmin, async (req, res) => {
 
   const {
     barcode,
@@ -206,10 +199,7 @@ app.get("/products/by-art/:art", auth, async (req, res) => {
 // ===============================
 // ADMIN: Produkt aktualisieren
 // ===============================
-app.put("/admin/products/:id", auth, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.put("/admin/products/:id", auth, requireAdmin, async (req, res) => {
 
   const { id } = req.params;
   const { name, default_package, unit, active } = req.body;
@@ -238,10 +228,7 @@ app.put("/admin/products/:id", auth, async (req, res) => {
 // ===============================
 // ADMIN: User anlegen
 // ===============================
-app.post("/admin/users", auth, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.post("/admin/users", auth, requireAdmin, async (req, res) => {
 
   const {
   username,
@@ -292,10 +279,7 @@ VALUES ($1, $2, $3, $4, $5, $6)
 // ===============================
 // ADMIN: Userliste
 // ===============================
-app.get("/admin/users", auth, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.get("/admin/users", auth, requireAdmin, async (req, res) => {
 
   const result = await pool.query(`
     SELECT
@@ -316,10 +300,7 @@ app.get("/admin/users", auth, async (req, res) => {
 // ===============================
 // ADMIN: User bearbeiten
 // ===============================
-app.put("/admin/users/:id", auth, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.put("/admin/users/:id", auth, requireAdmin, async (req, res) => {
 
   const check = await pool.query(
     "SELECT role FROM users WHERE id = $1",
@@ -348,10 +329,11 @@ app.put("/admin/users/:id", auth, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post("/admin/users/:id/reset-password", auth, async (req, res) => {
-  if (req.user.role !== "admin") {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+// ===============================
+// ADMIN: PW-Reset
+// ===============================
+
+app.post("/admin/users/:id/reset-password", auth, requireAdmin, async (req, res) => {
 
   const defaultPassword = "Monsipan123!";
   const hash = await bcrypt.hash(defaultPassword, 10);
@@ -368,6 +350,43 @@ app.post("/admin/users/:id/reset-password", auth, async (req, res) => {
   );
 
   res.json({ ok: true, password: defaultPassword });
+});
+
+// ===============================
+// User: PW-Zwang
+// ===============================
+
+app.post("/me/force-change-password", auth, async (req, res) => {
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 8) {
+    return res.status(400).json({ error: "PASSWORD_TOO_SHORT" });
+  }
+
+  // 🔒 Nur erlaubt, wenn wirklich Pflicht besteht
+  const check = await pool.query(
+    "SELECT must_change_password FROM users WHERE id = $1",
+    [req.user.id]
+  );
+
+  if (!check.rows[0]?.must_change_password) {
+    return res.status(403).json({ error: "NO_PASSWORD_CHANGE_REQUIRED" });
+  }
+
+  const hash = await bcrypt.hash(newPassword, 10);
+
+  await pool.query(
+    `
+    UPDATE users
+    SET
+      password_hash = $1,
+      must_change_password = false
+    WHERE id = $2
+    `,
+    [hash, req.user.id]
+  );
+
+  res.json({ ok: true });
 });
 
 // ============================
@@ -417,31 +436,6 @@ app.get("/me", auth, async (req, res) => {
   );
 
   res.json(result.rows[0]);
-});
-
-// ============================
-// USER: PW-Reset Pflicht
-// ============================
-app.post("/me/change-password", auth, async (req, res) => {
-  const { password } = req.body;
-
-  if (!password || password.length < 8) {
-    return res.status(400).json({ error: "Password too short" });
-  }
-
-  const hash = await bcrypt.hash(password, 10);
-
-  await pool.query(
-    `
-    UPDATE users
-    SET password_hash = $1,
-        must_change_password = false
-    WHERE id = $2
-    `,
-    [hash, req.user.id]
-  );
-
-  res.json({ ok: true });
 });
 
 
@@ -823,6 +817,20 @@ app.get("/alerts/low-stock", auth, async (req, res) => {
     res.status(500).json({ error: "ALERTS_LOAD_FAILED" });
   }
 });
+
+function requireAdmin(req, res, next) {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "ADMIN_ONLY" });
+  }
+  next();
+}
+
+function requireLagerleiter(req, res, next) {
+  if (req.user.role !== "lagerleiter" && req.user.role !== "admin") {
+    return res.status(403).json({ error: "LAGERLEITER_ONLY" });
+  }
+  next();
+}
 
 
 /* =========================
