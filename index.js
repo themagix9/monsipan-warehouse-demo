@@ -772,6 +772,50 @@ app.get("/stock/by-product/:id", auth, async (req, res) => {
   }
 });
 
+// ===============================
+// ALERTS: Low-Stock (für Lagerleiter)
+// ===============================
+app.get("/alerts/low-stock", auth, async (req, res) => {
+  try {
+    // 🔒 Nur Lagerleiter (optional: admin ebenfalls erlauben)
+    if (req.user.role !== "lagerleiter" && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        p.id,
+        p.name,
+        COALESCE(p.min_stock, 0) AS min_stock,
+        COALESCE(SUM(s.quantity), 0) AS total_quantity,
+
+        -- optional: Lagerorte als JSON (nur wenn vorhanden)
+        COALESCE(
+          json_agg(
+            json_build_object('location', s.location, 'quantity', s.quantity)
+          ) FILTER (WHERE s.location IS NOT NULL),
+          '[]'::json
+        ) AS locations
+
+      FROM products p
+      LEFT JOIN stock s
+        ON s.product_id = p.id
+
+      WHERE p.active = true
+
+      GROUP BY p.id
+      HAVING COALESCE(SUM(s.quantity), 0) <= COALESCE(p.min_stock, 0)
+      ORDER BY (COALESCE(p.min_stock,0) - COALESCE(SUM(s.quantity),0)) DESC, p.name;
+    `);
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error("GET /alerts/low-stock ERROR:", err);
+    res.status(500).json({ error: "ALERTS_LOAD_FAILED" });
+  }
+});
+
+
 /* =========================
    SERVER
 ========================= */
