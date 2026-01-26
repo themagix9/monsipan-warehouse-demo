@@ -659,6 +659,7 @@ app.get("/stock", auth, async (req, res) => {
         p.package,
         p.unit,
         p.color,
+        p.min_stock,
         s.location,
         s.quantity
       FROM stock s
